@@ -6,6 +6,12 @@
 <meta name="theme-color" content="#14111f">
 <title>Melodim</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Melodim">
 <style>
   /* Tek sütun: üstte başlık, ortada liste, altta mini çalar + sekmeler */
   :root {
@@ -247,5 +253,10 @@
 <audio id="audio" preload="auto"></audio>
 <script src="playlists.js"></script>
 <script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
 </body>
 </html>
