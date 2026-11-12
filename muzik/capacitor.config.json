@@ -3,6 +3,11 @@
   "appName": "Melodim",
   "webDir": "www",
   "backgroundColor": "#14111f",
-  "android": { "backgroundColor": "#14111f", "allowMixedContent": true },
-  "ios": { "backgroundColor": "#14111f", "contentInset": "never" }
+  "android": {
+    "backgroundColor": "#14111f"
+  },
+  "ios": {
+    "backgroundColor": "#14111f",
+    "contentInset": "never"
+  }
 }

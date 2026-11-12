@@ -103,7 +103,6 @@
   #full .cover .art { width: min(78vw, 340px, 42vh); height: min(78vw, 340px, 42vh); border-radius: 24px; font-size: 72px; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
   #full h2 { margin: 0; font-size: 22px; text-wrap: balance; }
   #full .sub { color: var(--muted); margin-top: 4px; }
-  .live { display: inline-block; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 1px; padding: 3px 8px; border-radius: 6px; margin-top: 10px; }
   .seek { margin-top: 18px; }
   .seek input { width: 100%; accent-color: var(--accent); }
   .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -168,14 +167,6 @@
     <div class="list" id="plList"></div>
   </section>
 
-  <section id="radioView" class="hidden">
-    <div class="toolbar">
-      <input class="search" id="radioSearch" type="search" placeholder="Radyo ara (ör. Kral, Joy, Power)" autocomplete="off">
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="status" id="radioStatus"></div>
-    <div class="list" id="radioList"></div>
-  </section>
 </main>
 
 <div id="mini" class="hidden">
@@ -194,10 +185,6 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h13M3 12h13M3 18h9"/><path d="M19 15v6M16 18h6"/></svg>
     Listem
   </button>
-  <button id="tabRadio">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/></svg>
-    Radyo
-  </button>
 </nav>
 
 <div id="full" aria-hidden="true">
@@ -214,7 +201,6 @@
   <div>
     <h2 id="fullTitle"></h2>
     <div class="sub" id="fullSub"></div>
-    <span class="live hidden" id="liveBadge">CANLI</span>
   </div>
   <div class="seek" id="seekWrap">
     <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Şarkı konumu">

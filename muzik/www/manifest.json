@@ -1,7 +1,7 @@
 {
   "name": "Melodim",
   "short_name": "Melodim",
-  "description": "Reklamsız, arka planda çalan kişisel müzik ve radyo uygulaması",
+  "description": "Reklamsız, arka planda çalan kişisel müzik uygulaması",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

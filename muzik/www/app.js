@@ -7,7 +7,6 @@
   const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
   const ICON_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>';
-  const ICON_STAR = f => `<svg viewBox="0 0 24 24" fill="${f ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = s => { if (!isFinite(s) || s < 0) return '0:00'; s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const norm = s => String(s || '').toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i');
@@ -59,39 +58,18 @@
   const platform = Cap && Cap.getPlatform ? Cap.getPlatform() : 'web';
   const Plugins = (Cap && Cap.Plugins) || {};
   const NativeMedia = platform === 'android' ? Plugins.MediaService : null;
-  const isIOS = platform === 'ios' || /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  // Web sürümü https üzerinden açılır; tarayıcı http yayınları engeller
-  const needHttps = !isNative && location.protocol === 'https:';
-  // Bazı büyük yayıncılar (Virgin, Süper FM, Metro FM...) https'i de destekler; adresi yükselt
-  function streamUrl(s) {
-    let url = s.url_resolved || s.url || '';
-    const m = url.match(/^http:\/\/([\w-]+\.live\.streamtheworld\.com)(?::\d+)?\/(.+)$/i);
-    if (m) url = `https://${m[1]}/${m[2]}`;
-    return url;
-  }
-  function playableStation(s) {
-    const url = streamUrl(s);
-    if (!url) return false;
-    if (needHttps && !url.startsWith('https://')) return false;
-    const codec = (s.codec || '').toUpperCase();
-    if (s.hls || /\.m3u8(\?|$)/i.test(url)) return isIOS;           // HLS'i iPhone doğrudan çalar
-    if (isIOS && /OGG|OPUS|FLAC|VORBIS/.test(codec)) return false; // iPhone bu biçimleri çalamaz
-    return true;
-  }
+
 
   // ---------- Durum ----------
   let tracks = [];            // kitaplık (blob olmadan)
-  let favStations = store.get('favs', []);
   let shuffle = store.get('shuffle', false);
   let repeat = store.get('repeat', 'off'); // off | all | one
-  let cur = null;             // { kind:'track', id, title, artist } | { kind:'radio', station }
+  let cur = null;             // { kind:'track', id, title, artist }
   let queue = [];             // şarkı kimlikleri
   let qi = -1;
   let objectUrl = null;
   let sleepEnd = 0;
-  let wantPlaying = false;    // kullanıcı çalmak istiyor mu (radyo yeniden bağlanma için)
-  let retryT = null;
-  let retries = 0;
+  let wantPlaying = false;
 
   // ---------- Kitaplık ----------
   function parseName(fileName) {
@@ -136,7 +114,7 @@
     $('libActions').classList.toggle('hidden', !tracks.length);
     $('libStatus').textContent = tracks.length ? `${tracks.length} şarkı` + (list.length !== tracks.length ? ` · ${list.length} sonuç` : '') : '';
     if (!tracks.length) {
-      $('libList').innerHTML = `<div class="empty"><b>Kitaplığın boş</b>Telefonundaki müzik dosyalarını eklemek için <b style="display:inline;color:var(--accent)">+ Ekle</b>'ye dokun. Şarkılar uygulamanın içine kaydedilir; reklam yok, ekran kapalıyken de çalar.<br><br>Bu arada <b style="display:inline">Radyo</b> sekmesinden canlı yayın dinleyebilirsin.</div>`;
+      $('libList').innerHTML = `<div class="empty"><b>Kitaplığın boş</b>Telefonundaki müzik dosyalarını eklemek için <b style="display:inline;color:var(--accent)">+ Ekle</b>'ye dokun. Şarkılar uygulamanın içine kaydedilir; reklam yok, ekran kapalıyken de çalar.</div>`;
       return;
     }
     if (!list.length) { $('libList').innerHTML = '<div class="empty">Eşleşen şarkı yok.</div>'; return; }
@@ -184,15 +162,6 @@
     updateUI(); renderLibrary(); renderPlaylist();
     if (autoplay) await doPlay();
   }
-  async function playStation(st, autoplay = true) {
-    clearTimeout(retryT); retries = 0;
-    cur = { kind: 'radio', station: st };
-    queue = []; qi = -1;
-    audio.src = streamUrl(st);
-    updateUI(); renderRadio();
-    if (autoplay) await doPlay();
-    try { fetch(`${radioBase}/json/url/${st.stationuuid}`).catch(() => {}); } catch {}
-  }
   async function doPlay() {
     wantPlaying = true;
     try { await audio.play(); return true; }
@@ -201,18 +170,15 @@
       wantPlaying = false; updateUI(); return false;
     }
   }
-  function pause() { wantPlaying = false; clearTimeout(retryT); audio.pause(); }
+  function pause() { wantPlaying = false; audio.pause(); }
   function toggle() {
-    if (!cur) { if (tracks.length) playQueue(tracks.map(t => t.id), 0); else switchTab('radio'); return; }
-    if (audio.paused) {
-      if (cur.kind === 'radio') { audio.src = streamUrl(cur.station); } // canlı yayına yeniden bağlan
-      doPlay();
-    } else pause();
+    if (!cur) { if (tracks.length) playQueue(tracks.map(t => t.id), 0); else $('fileInput').click(); return; }
+    if (audio.paused) doPlay(); else pause();
   }
   function stopAll() {
     pause(); audio.removeAttribute('src'); audio.load(); cur = null; queue = []; qi = -1;
     if (NativeMedia) NativeMedia.stop().catch(() => {});
-    updateUI(); renderLibrary(); renderRadio();
+    updateUI(); renderLibrary(); renderPlaylist();
   }
   function nextIndex(dir) {
     if (!queue.length) return -1;
@@ -224,21 +190,13 @@
   }
   function next() {
     if (!cur) return;
-    if (cur.kind === 'radio') return stepStation(1);
     const n = nextIndex(1); if (n < 0) { pause(); audio.currentTime = 0; return; }
     qi = n; playTrackAt(qi);
   }
   function prev() {
     if (!cur) return;
-    if (cur.kind === 'radio') return stepStation(-1);
     if (audio.currentTime > 4) { audio.currentTime = 0; return; }
     const n = nextIndex(-1); if (n < 0) return; qi = n; playTrackAt(qi);
-  }
-  function stepStation(dir) {
-    const list = favStations.length ? favStations : radioResults;
-    if (!list.length) return;
-    const i = list.findIndex(s => s.stationuuid === cur.station.stationuuid);
-    playStation(list[(i + dir + list.length) % list.length]);
   }
 
   audio.addEventListener('ended', () => {
@@ -247,19 +205,9 @@
   });
   audio.addEventListener('play', () => { updateUI(); });
   audio.addEventListener('pause', () => { updateUI(); saveResume(); });
-  audio.addEventListener('playing', () => { clearTimeout(retryT); retries = 0; });
   audio.addEventListener('error', () => {
-    if (!cur || !audio.getAttribute('src')) return;
-    if (cur.kind === 'radio') {
-      if (wantPlaying && ++retries > 5) { wantPlaying = false; retries = 0; toast('Bu radyo şu an yayın yapmıyor ya da telefonunda çalınamıyor. Başka bir istasyon dene.', 4000); updateUI(); return; }
-      if (wantPlaying) { toast('Yayın bağlantısı koptu, yeniden deneniyor…'); retryT = setTimeout(() => { if (wantPlaying && cur && cur.kind === 'radio') { audio.src = streamUrl(cur.station); audio.play().catch(() => {}); } }, 4000); }
-    } else { toast('Bu dosya çalınamadı, sonrakine geçiliyor'); setTimeout(next, 800); }
-  });
-  audio.addEventListener('stalled', () => {
-    if (cur && cur.kind === 'radio' && wantPlaying) {
-      clearTimeout(retryT);
-      retryT = setTimeout(() => { if (wantPlaying && audio.readyState < 3 && cur && cur.kind === 'radio') { audio.src = streamUrl(cur.station); audio.play().catch(() => {}); } }, 8000);
-    }
+    if (!cur || !audio.getAttribute('src') || !audio.error) return;
+    toast('Bu dosya çalınamadı, sonrakine geçiliyor'); setTimeout(next, 800);
   });
   let lastSave = 0;
   audio.addEventListener('timeupdate', () => {
@@ -271,15 +219,13 @@
   // ---------- Kaldığın yerden devam ----------
   function saveResume() {
     if (!cur) { store.set('resume', null); return; }
-    if (cur.kind === 'radio') store.set('resume', { kind: 'radio', station: cur.station });
-    else store.set('resume', { kind: 'track', queue, qi, pos: audio.currentTime || 0 });
+    store.set('resume', { kind: 'track', queue, qi, pos: audio.currentTime || 0 });
   }
   async function resume() {
     const r = store.get('resume', null);
     const auto = store.get('autoplay', true);
     if (!r) return;
-    if (r.kind === 'radio' && r.station) { await playStation(r.station, auto); }
-    else if (r.kind === 'track' && Array.isArray(r.queue)) {
+    if (r.kind === 'track' && Array.isArray(r.queue)) {
       const ids = new Set(tracks.map(t => t.id));
       queue = r.queue.filter(id => ids.has(id)); if (!queue.length) return;
       qi = Math.min(Math.max(0, r.qi), queue.length - 1);
@@ -290,10 +236,6 @@
   // ---------- Arayüz güncelleme ----------
   function curInfo() {
     if (!cur) return null;
-    if (cur.kind === 'radio') {
-      const s = cur.station;
-      return { title: s.name.trim(), sub: [s.country, (s.tags || '').split(',').slice(0, 2).join(', ')].filter(Boolean).join(' · ') || 'Canlı radyo', art: artHTML(s.name, s.favicon), live: true, source: 'Radyo' };
-    }
     return { title: cur.title, sub: cur.artist, art: artHTML(cur.artist), live: false, source: 'Kitaplığım' };
   }
   function updateUI() {
@@ -310,16 +252,12 @@
       for (const el of [$('miniArt'), $('fullArt')]) { el.setAttribute('style', info.art.style); el.innerHTML = info.art.html; }
       $('miniTitle').textContent = info.title; $('miniSub').textContent = info.sub;
       $('fullTitle').textContent = info.title; $('fullSub').textContent = info.sub; $('fullSource').textContent = info.source;
-      $('liveBadge').classList.toggle('hidden', !info.live);
-      $('seekWrap').classList.toggle('hidden', info.live);
-      $('shuffleBtn').style.visibility = info.live ? 'hidden' : '';
-      $('repeatBtn').style.visibility = info.live ? 'hidden' : '';
     }
     syncMediaSession(info, playing);
   }
   function updateProgress() {
     const d = audio.duration, c = audio.currentTime;
-    const live = !cur || cur.kind === 'radio' || !isFinite(d);
+    const live = !cur || !isFinite(d);
     $('miniBar').style.width = live ? '0' : (c / d * 100) + '%';
     if (!live && !seeking) { $('seek').value = Math.round(c / d * 1000); $('tCur').textContent = fmt(c); $('tDur').textContent = fmt(d); }
   }
@@ -396,115 +334,15 @@
 
   // Sekmeler
   function switchTab(t) {
-    for (const [tab, view, id] of [['tabLib', 'libView', 'lib'], ['tabList', 'listView', 'list'], ['tabRadio', 'radioView', 'radio']]) {
+    if (t !== 'list') t = 'lib';
+    for (const [tab, view, id] of [['tabLib', 'libView', 'lib'], ['tabList', 'listView', 'list']]) {
       $(tab).classList.toggle('on', t === id); $(view).classList.toggle('hidden', t !== id);
     }
     if (t === 'list') renderPlaylist();
     store.set('tab', t);
-    if (t === 'radio' && !radioLoaded) { radioLoaded = true; selectChip(favStations.length ? 'fav' : 'tr'); }
   }
   $('tabLib').onclick = () => switchTab('lib');
-  $('tabRadio').onclick = () => switchTab('radio');
   $('tabList').onclick = () => switchTab('list');
-
-  // ---------- Radyo (radio-browser.info, ücretsiz ve reklamsız arama) ----------
-  const MIRRORS = ['https://de1.api.radio-browser.info', 'https://de2.api.radio-browser.info', 'https://fi1.api.radio-browser.info', 'https://nl1.api.radio-browser.info'];
-  let radioBase = MIRRORS[0];
-  let radioResults = [];
-  let radioLoaded = false;
-  let activeChip = 'tr';
-  let reqId = 0;
-  const CHIPS = [
-    { id: 'fav', label: '★ Favoriler' },
-    { id: 'tr', label: 'Türkiye', q: { countrycode: 'TR' } },
-    { id: 'rap', label: 'Türkçe Rap', q: { countrycode: 'TR', tag: 'rap' } },
-    { id: 'pop', label: 'Türkçe Pop', q: { countrycode: 'TR', tag: 'pop' } },
-    { id: 'slow', label: 'Slow', q: { countrycode: 'TR', tag: 'slow' } },
-    { id: 'arabesk', label: 'Arabesk', q: { tag: 'arabesk' } },
-    { id: 'turku', label: 'Türkü', q: { countrycode: 'TR', tag: 'folk' } },
-    { id: 'rock', label: 'Rock', q: { tag: 'rock' } },
-    { id: 'hits', label: 'Dünya Hitleri', q: { tag: 'hits' } },
-    { id: 'jazz', label: 'Caz', q: { tag: 'jazz' } },
-    { id: 'classical', label: 'Klasik', q: { tag: 'classical' } },
-    { id: 'lofi', label: 'Lo-fi', q: { tag: 'lofi' } },
-  ];
-  $('chips').innerHTML = CHIPS.map(c => `<button class="chip" data-chip="${c.id}">${esc(c.label)}</button>`).join('');
-  $('chips').addEventListener('click', e => { const b = e.target.closest('[data-chip]'); if (b) { $('radioSearch').value = ''; selectChip(b.dataset.chip); } });
-  function selectChip(id) {
-    activeChip = id;
-    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.chip === id));
-    if (id === 'fav') { radioResults = favStations.filter(playableStation); $('radioStatus').textContent = favStations.length ? `${favStations.length} favori istasyon` : ''; renderRadio(); return; }
-    searchRadio(CHIPS.find(c => c.id === id).q);
-  }
-  async function radioFetch(path) {
-    let lastErr;
-    for (const base of [radioBase, ...MIRRORS.filter(m => m !== radioBase)]) {
-      try {
-        const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 9000);
-        const r = await fetch(base + path, { signal: ctl.signal }); clearTimeout(to);
-        if (!r.ok) throw new Error(r.status);
-        radioBase = base; return await r.json();
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr;
-  }
-  async function searchRadio(q) {
-    const my = ++reqId;
-    $('radioStatus').textContent = 'Yükleniyor…'; $('radioList').innerHTML = '';
-    const p = new URLSearchParams({ ...q, order: 'clickcount', reverse: 'true', hidebroken: 'true', limit: '250' });
-    try {
-      const data = await radioFetch('/json/stations/search?' + p);
-      if (my !== reqId) return;
-      const seen = new Set();
-      radioResults = data.filter(s => playableStation(s) && !seen.has(s.name.trim().toLowerCase()) && seen.add(s.name.trim().toLowerCase()));
-      $('radioStatus').textContent = radioResults.length ? `${radioResults.length} istasyon` : '';
-      renderRadio();
-    } catch {
-      if (my !== reqId) return;
-      $('radioStatus').textContent = '';
-      $('radioList').innerHTML = '<div class="empty"><b>Radyo listesi yüklenemedi</b>İnternet bağlantını kontrol edip tekrar dene. Kitaplığındaki şarkılar internetsiz de çalar.</div>';
-    }
-  }
-  let searchT;
-  $('radioSearch').addEventListener('input', () => {
-    clearTimeout(searchT);
-    const v = $('radioSearch').value.trim();
-    searchT = setTimeout(() => {
-      if (!v) { selectChip(activeChip === 'fav' ? 'fav' : 'tr'); return; }
-      document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
-      searchRadio({ name: v });
-    }, 450);
-  });
-  const isFav = s => favStations.some(f => f.stationuuid === s.stationuuid);
-  function renderRadio() {
-    if (!radioLoaded) return;
-    if (!radioResults.length) {
-      if (activeChip === 'fav' && !$('radioSearch').value.trim()) $('radioList').innerHTML = '<div class="empty"><b>Henüz favorin yok</b>Bir istasyonun yanındaki ☆ işaretine dokunarak favorilere ekle. Uygulama açıldığında son dinlediğin yayın otomatik başlar.</div>';
-      else if ($('radioStatus').textContent !== 'Yükleniyor…') $('radioList').innerHTML = '<div class="empty">İstasyon bulunamadı. Başka bir isim dene.</div>';
-      return;
-    }
-    $('radioList').innerHTML = radioResults.map(s => {
-      const a = artHTML(s.name, s.favicon);
-      const on = cur && cur.kind === 'radio' && cur.station.stationuuid === s.stationuuid;
-      const sub = [s.state || s.country, (s.tags || '').split(',').filter(Boolean).slice(0, 3).join(', '), s.bitrate ? s.bitrate + ' kbps' : ''].filter(Boolean).join(' · ');
-      return `<div class="row${on ? ' playing' : ''}">
-        <div class="art" style="${a.style}">${a.html}</div>
-        <button class="meta" data-st="${s.stationuuid}"><div class="t">${esc(s.name.trim())}</div><div class="s">${esc(sub)}</div></button>
-        <button class="row-act${isFav(s) ? ' fav' : ''}" data-fav="${s.stationuuid}" aria-label="Favori">${ICON_STAR(isFav(s))}</button></div>`;
-    }).join('');
-  }
-  const pick = s => ({ stationuuid: s.stationuuid, name: s.name, url: s.url, url_resolved: s.url_resolved, favicon: s.favicon, country: s.country, state: s.state, tags: s.tags, bitrate: s.bitrate, codec: s.codec, hls: s.hls });
-  $('radioList').addEventListener('click', e => {
-    const p = e.target.closest('[data-st]'), f = e.target.closest('[data-fav]');
-    if (p) { const s = radioResults.find(x => x.stationuuid === p.dataset.st); if (s) playStation(pick(s)); }
-    if (f) {
-      const s = radioResults.find(x => x.stationuuid === f.dataset.fav); if (!s) return;
-      if (isFav(s)) { favStations = favStations.filter(x => x.stationuuid !== s.stationuuid); toast('Favorilerden çıkarıldı', 1400); }
-      else { favStations.push(pick(s)); toast('Favorilere eklendi', 1400); }
-      store.set('favs', favStations); renderRadio();
-    }
-  });
-
 
   // ---------- Listem (Spotify'dan aktarılan şarkı listesi) ----------
   const LIST = (window.MELODIM_LISTS || [])[0] || null;
@@ -591,7 +429,7 @@
   // ---------- Başlat ----------
   (async () => {
     try { await loadLibrary(); } catch { $('libStatus').textContent = 'Kitaplık açılamadı (tarayıcı depolaması kapalı olabilir).'; }
-    switchTab(store.get('tab', tracks.length ? 'lib' : 'radio'));
+    switchTab(store.get('tab', 'lib'));
     updateUI();
     try { await resume(); } catch {}
   })();

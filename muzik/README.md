@@ -5,12 +5,11 @@ Reklamsız, tamamen sana ait kişisel müzik uygulaması. Uygulamayı açınca s
 ## Özellikler
 - **Kitaplığım:** Telefonundaki müzik dosyalarını (MP3, M4A, AAC, OGG, WAV, FLAC) ekle. Şarkılar uygulamanın içine kaydedilir, internet gerekmez. Arama, karışık çalma, tümünü/tek şarkıyı tekrar.
 - **Listem:** Spotify'daki "1. çalma listem" listesinin şarkı adları. Kitaplığa eklediğin dosyalar bu listeyle otomatik eşleşir ve buradan çalınır; eksik olanlar Spotify'da açılabilir. (Spotify'dan ses alınmaz, yalnızca şarkı adları.)
-- **Radyo:** Türkiye ve dünyadan binlerce ücretsiz canlı yayın (radio-browser.info). Türkçe Pop, Slow, Arabesk, Türkü, Rock, Caz, Klasik, Lo-fi kategorileri; isimle arama; favoriler.
 - **Arka planda çalma:** Ekran kapalıyken ve başka uygulamalardayken çalmaya devam eder.
   - Android: bildirim çubuğunda ve kilit ekranında önceki / çal-duraklat / sonraki / kapat düğmeleri; kulaklık çıkarılınca otomatik duraklar.
   - iOS: kilit ekranı ve Denetim Merkezi kontrolleri.
 - **Uyku zamanlayıcısı:** 15 dk – 1,5 saat sonra müziği kendiliğinden durdurur.
-- **Kaldığın yerden devam:** Uygulamayı açınca son şarkı/radyo otomatik başlar.
+- **Kaldığın yerden devam:** Uygulamayı açınca son şarkı otomatik başlar.
 
 Şarkı adları dosya adından okunur: `Sanatçı - Şarkı Adı.mp3` biçimindeki dosyalar düzgün görünür.
 
