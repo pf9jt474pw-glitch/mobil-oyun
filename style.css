@@ -117,3 +117,5 @@ main { padding: 8px 16px; }
 
 .live { color: #ff4d5e; font-size: 13px; font-weight: 700; text-align: center; margin: 10px 0 6px; letter-spacing: .5px; }
 .tab { padding: 10px 4px; font-size: 14px; }
+
+.ver { font-size: 12px; font-weight: 400; color: var(--muted); }

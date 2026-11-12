@@ -1,7 +1,7 @@
 // Uygulama kabuğunu önbelleğe alır; müzik akışlarına dokunmaz.
-const CACHE = 'muzik-v6';
+const CACHE = 'muzik-v7';
 const SHELL = [
-  './', 'index.html', 'style.css?v=6', 'app.js?v=6', 'manifest.webmanifest',
+  './', 'index.html', 'style.css?v=7', 'app.js?v=7', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
