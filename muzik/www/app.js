@@ -106,7 +106,7 @@
   async function loadLibrary() {
     const all = await dbAll();
     tracks = all.map(({ blob, ...r }) => r).sort((a, b) => a.artist.localeCompare(b.artist, 'tr') || a.title.localeCompare(b.title, 'tr'));
-    renderLibrary();
+    renderLibrary(); renderPlaylist();
   }
   function filteredTracks() {
     const q = norm($('libSearch').value.trim());
@@ -122,7 +122,7 @@
     }
     if (!list.length) { $('libList').innerHTML = '<div class="empty">Eşleşen şarkı yok.</div>'; return; }
     $('libList').innerHTML = list.map(t => {
-      const a = artHTML(t.artist + t.title);
+      const a = artHTML(t.artist);
       const on = cur && cur.kind === 'track' && cur.id === t.id;
       return `<div class="row${on ? ' playing' : ''}" data-id="${t.id}">
         <div class="art" style="${a.style}">${a.html}</div>
@@ -162,7 +162,7 @@
     cur = { kind: 'track', id, title: rec.title, artist: rec.artist };
     audio.src = objectUrl;
     if (startAt) audio.addEventListener('loadedmetadata', () => { try { audio.currentTime = startAt; } catch {} }, { once: true });
-    updateUI(); renderLibrary();
+    updateUI(); renderLibrary(); renderPlaylist();
     if (autoplay) await doPlay();
   }
   async function playStation(st, autoplay = true) {
@@ -275,7 +275,7 @@
       const s = cur.station;
       return { title: s.name.trim(), sub: [s.country, (s.tags || '').split(',').slice(0, 2).join(', ')].filter(Boolean).join(' · ') || 'Canlı radyo', art: artHTML(s.name, s.favicon), live: true, source: 'Radyo' };
     }
-    return { title: cur.title, sub: cur.artist, art: artHTML(cur.artist + cur.title), live: false, source: 'Kitaplığım' };
+    return { title: cur.title, sub: cur.artist, art: artHTML(cur.artist), live: false, source: 'Kitaplığım' };
   }
   function updateUI() {
     const info = curInfo(); const playing = !audio.paused;
@@ -377,13 +377,16 @@
 
   // Sekmeler
   function switchTab(t) {
-    $('tabLib').classList.toggle('on', t === 'lib'); $('tabRadio').classList.toggle('on', t === 'radio');
-    $('libView').classList.toggle('hidden', t !== 'lib'); $('radioView').classList.toggle('hidden', t !== 'radio');
+    for (const [tab, view, id] of [['tabLib', 'libView', 'lib'], ['tabList', 'listView', 'list'], ['tabRadio', 'radioView', 'radio']]) {
+      $(tab).classList.toggle('on', t === id); $(view).classList.toggle('hidden', t !== id);
+    }
+    if (t === 'list') renderPlaylist();
     store.set('tab', t);
     if (t === 'radio' && !radioLoaded) { radioLoaded = true; selectChip(favStations.length ? 'fav' : 'tr'); }
   }
   $('tabLib').onclick = () => switchTab('lib');
   $('tabRadio').onclick = () => switchTab('radio');
+  $('tabList').onclick = () => switchTab('list');
 
   // ---------- Radyo (radio-browser.info, ücretsiz ve reklamsız arama) ----------
   const MIRRORS = ['https://de1.api.radio-browser.info', 'https://de2.api.radio-browser.info', 'https://fi1.api.radio-browser.info', 'https://nl1.api.radio-browser.info'];
@@ -395,6 +398,7 @@
   const CHIPS = [
     { id: 'fav', label: '★ Favoriler' },
     { id: 'tr', label: 'Türkiye', q: { countrycode: 'TR' } },
+    { id: 'rap', label: 'Türkçe Rap', q: { countrycode: 'TR', tag: 'rap' } },
     { id: 'pop', label: 'Türkçe Pop', q: { countrycode: 'TR', tag: 'pop' } },
     { id: 'slow', label: 'Slow', q: { countrycode: 'TR', tag: 'slow' } },
     { id: 'arabesk', label: 'Arabesk', q: { tag: 'arabesk' } },
@@ -481,6 +485,74 @@
       store.set('favs', favStations); renderRadio();
     }
   });
+
+
+  // ---------- Listem (Spotify'dan aktarılan şarkı listesi) ----------
+  const LIST = (window.MELODIM_LISTS || [])[0] || null;
+  let plFilter = 'all';
+  const clean = s => norm(String(s || '').replace(/\(.*?\)|\[.*?\]/g, ' ').replace(/\b(feat|ft)\.?\b.*$/i, ' ')).replace(/[^a-z0-9çğöşü ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function matchTrack(item) {
+    const ti = clean(item.title); if (!ti) return null;
+    const artists = item.artist.split(',').map(clean).filter(Boolean);
+    let best = null;
+    for (const t of tracks) {
+      const lt = clean(t.title), la = clean(t.artist), whole = clean(t.name || (t.artist + ' ' + t.title));
+      const titleOk = lt === ti || (ti.length > 3 && (lt.includes(ti) || whole.includes(ti))) || (lt.length > 3 && ti.includes(lt));
+      if (!titleOk) continue;
+      const artistOk = artists.some(a => la.includes(a) || a.includes(la) || whole.includes(a));
+      if (artistOk) return t;
+      if (!best && /bilinmeyen/.test(la)) best = t; // dosya adında sanatçı yoksa yalnızca şarkı adıyla eşleştir
+    }
+    return best;
+  }
+  function plRows() {
+    if (!LIST) return [];
+    const q = norm($('plSearch').value.trim());
+    return LIST.tracks.map(it => ({ it, m: matchTrack(it) }))
+      .filter(r => plFilter === 'all' || (plFilter === 'have' ? r.m : !r.m))
+      .filter(r => !q || norm(r.it.title + ' ' + r.it.artist).includes(q));
+  }
+  function renderPlaylist() {
+    if (!LIST || $('listView').classList.contains('hidden')) return;
+    const all = LIST.tracks.map(it => matchTrack(it));
+    const have = all.filter(Boolean).length;
+    $('plName').textContent = LIST.name;
+    $('plStats').textContent = `${LIST.tracks.length} şarkı · ${have} tanesi kitaplığında`;
+    $('plActions').classList.toggle('hidden', !have);
+    const rows = plRows();
+    const hint = have ? '' : `<div class="hint"><b>Bu şarkılar Spotify'dan gelmez.</b> Listede yalnızca şarkı adları var. Aynı şarkıların dosyalarını <b>Kitaplığım → + Ekle</b> ile eklediğinde burada otomatik eşleşir ve reklamsız, arka planda çalar. Eksik olanları yeşil düğmeyle Spotify'da açabilirsin.</div>`;
+    if (!rows.length) { $('plList').innerHTML = hint + '<div class="empty">Bu filtrede şarkı yok.</div>'; return; }
+    $('plList').innerHTML = hint + rows.map(({ it, m }) => {
+      const a = artHTML(it.artist.split(',')[0]);
+      const on = m && cur && cur.kind === 'track' && cur.id === m.id;
+      const act = m
+        ? `<button class="tag have" data-plplay="${m.id}">Çal</button>`
+        : `<button class="tag sp" data-spid="${esc(it.id)}">Spotify</button>`;
+      return `<div class="row${on ? ' playing' : ''}${m ? '' : ' dim'}">
+        <div class="art" style="${a.style}">${a.html}</div>
+        <div class="meta"><div class="t">${esc(it.title)}</div><div class="s">${esc(it.artist)}</div></div>
+        ${act}</div>`;
+    }).join('');
+  }
+  function plQueue() { return LIST ? LIST.tracks.map(matchTrack).filter(Boolean).map(t => t.id).filter((v, i, a) => a.indexOf(v) === i) : []; }
+  $('plList').addEventListener('click', e => {
+    const p = e.target.closest('[data-plplay]'), sp = e.target.closest('[data-spid]');
+    if (p) { const ids = plQueue(); playQueue(ids, ids.indexOf(p.dataset.plplay)); }
+    if (sp && sp.dataset.spid) {
+      const url = 'https://open.spotify.com/track/' + sp.dataset.spid;
+      if (isNative && Plugins.App) window.location.href = url; else window.open(url, '_blank', 'noopener');
+    }
+  });
+  $('plFilters').addEventListener('click', e => {
+    const b = e.target.closest('[data-plf]'); if (!b) return;
+    plFilter = b.dataset.plf;
+    document.querySelectorAll('[data-plf]').forEach(c => c.classList.toggle('on', c === b));
+    renderPlaylist();
+  });
+  $('plSearch').oninput = renderPlaylist;
+  $('plPlay').onclick = () => { shuffle = false; saveModes(); const ids = plQueue(); playQueue(ids, 0); };
+  $('plShuffle').onclick = () => { shuffle = true; saveModes(); const ids = plQueue(); playQueue(ids, Math.floor(Math.random() * ids.length)); };
+  if (!LIST) $('tabList').classList.add('hidden');
 
   // ---------- Geri tuşu (Android) ----------
   if (Plugins.App) {
