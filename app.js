@@ -530,6 +530,8 @@ function npStart(st) {
   NP.station = st;
   NP.text = '';
   NP.strategy = undefined;
+  NP.diag = {};
+  NP.id3 = false;
   npTick();
   NP.timer = setInterval(npTick, 20000);
 }
@@ -599,6 +601,46 @@ const NP_STRATEGIES = {
     })).catch(() => null);
     return res;
   },
+  // Yayının içine gömülü ICY bilgisi: yayının küçük bir parçası okunur, sonra bağlantı kapatılır
+  async icy(st) {
+    if (/\.m3u8/i.test(st.url)) return null;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 9000);
+    try {
+      const r = await fetch(st.url, { headers: { 'Icy-MetaData': '1' }, signal: ctl.signal, cache: 'no-store' });
+      if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
+      const metaint = parseInt(r.headers.get('icy-metaint') || '0', 10);
+      const reader = r.body.getReader();
+      const chunks = [];
+      let size = 0;
+      const limit = metaint ? metaint + 4096 + 1 : 98304;
+      while (size < limit) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        size += value.length;
+      }
+      ctl.abort();
+      const buf = new Uint8Array(size);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+      // Bayt dizisinde StreamTitle='...'; ara
+      const latin = new TextDecoder('latin1').decode(buf);
+      const i = latin.indexOf("StreamTitle='");
+      if (i < 0) throw new Error(metaint ? 'başlık boş' : 'ICY bilgisi yok');
+      const start = i + 13;
+      const end = latin.indexOf("';", start);
+      if (end < 0) throw new Error('başlık yarım');
+      const raw = buf.slice(start, end);
+      let text;
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(raw); }
+      catch { text = new TextDecoder('windows-1254').decode(raw); }
+      return text.trim() ? splitSong(text) : null;
+    } finally {
+      clearTimeout(timer);
+      ctl.abort();
+    }
+  },
   // Icecast sunucuları
   async icecast(st) {
     if (/\.m3u8/i.test(st.url)) return null;
@@ -633,8 +675,16 @@ async function npTick() {
   const names = NP.strategy === undefined ? Object.keys(NP_STRATEGIES) : NP.strategy ? [NP.strategy] : [];
   if (!names.length) return;
   // Yolların hepsini aynı anda dene, ilk cevap veren kazanır
+  if (NP.strategy === undefined) NP.diag = {};
   const found = await Promise.any(names.map(async (name) => {
-    const info = await NP_STRATEGIES[name](st);
+    let info;
+    try {
+      info = await NP_STRATEGIES[name](st);
+    } catch (err) {
+      if (NP.diag) NP.diag[name] = `hata: ${err && err.name === 'TypeError' ? 'erişim engelli (CORS) ya da bağlantı yok' : (err && err.message) || err}`;
+      throw err;
+    }
+    if (NP.diag) NP.diag[name] = info ? `bulundu: ${info.artist ? info.artist + ' – ' : ''}${info.title}` : 'bu radyoya uymuyor';
     if (!info) throw new Error('yok');
     return { name, info };
   })).catch(() => null);
@@ -656,6 +706,18 @@ function npShow(st, { artist, title }) {
   setSessionMeta(title, artist ? `${artist} · ${st.title}` : st.title, st.artwork);
 }
 
+// Tanı: çalar ekranında radyo adına dokununca hangi yolun ne sonuç verdiğini göster
+function npDiagnose() {
+  const st = NP.station;
+  if (!st) return;
+  const d = NP.diag || {};
+  const lines = Object.keys(NP_STRATEGIES).map((k) => `${k}: ${d[k] || 'denenmedi'}`);
+  lines.push(`hls-id3: ${NP.id3 ? 'bilgi geldi' : 'bilgi gelmedi'}`);
+  alert(`Tanı – ${st.title}\n${st.url}\n\n${lines.join('\n')}`);
+}
+$('np-artist').addEventListener('click', npDiagnose);
+$('np-title').addEventListener('click', npDiagnose);
+
 // HLS yayınlarına gömülü şarkı bilgisi (iPhone Safari bunu okuyabilir)
 if (audio.textTracks && audio.textTracks.addEventListener) {
   audio.textTracks.addEventListener('addtrack', (e) => {
@@ -675,6 +737,7 @@ if (audio.textTracks && audio.textTracks.addEventListener) {
         else if (!title && v.key === 'TXXX' && / [-–] /.test(data)) title = data;
       }
       if (!title) return;
+      NP.id3 = true;
       const info = artist ? { artist, title } : splitSong(title);
       NP.strategy = NP.strategy || null; // gömülü bilgi geliyor, uzaktan sormaya gerek yok
       npShow(st, info);
