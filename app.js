@@ -200,15 +200,19 @@ function updateNowPlaying(t) {
   $('seek-row').classList.toggle('hidden', live);
   markPlaying();
   refreshFavUI();
+  if (live) npStart(t); else npStop();
+  setSessionMeta(t.title, t.artist, t.artwork);
+}
 
-  // Kilit ekranı / bildirim kontrolleri
+// Kilit ekranı / bildirim kontrolleri
+function setSessionMeta(title, artist, artwork) {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: t.title,
-      artist: t.artist,
+      title,
+      artist,
       album: 'Müzik',
-      artwork: t.artwork
-        ? [{ src: t.artwork, sizes: '480x480', type: 'image/jpeg' }]
+      artwork: artwork
+        ? [{ src: artwork, sizes: '480x480', type: 'image/jpeg' }]
         : [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
     });
   }
@@ -516,6 +520,145 @@ $('radio-filter').addEventListener('input', renderRadios);
 document.querySelector('.tab[data-tab="radio"]').addEventListener('click', () => {
   if (!radioLoaded) loadRadios();
 });
+
+// ---------- Radyoda şu an çalan şarkı ----------
+// Radyolar bu bilgiyi farklı yollarla verir; sırayla denenir, çalışan hatırlanır.
+const NP = { timer: null, station: null, text: '', strategy: undefined };
+
+function npStart(st) {
+  npStop();
+  NP.station = st;
+  NP.text = '';
+  NP.strategy = undefined;
+  npTick();
+  NP.timer = setInterval(npTick, 20000);
+}
+
+function npStop() {
+  clearInterval(NP.timer);
+  NP.timer = null;
+  NP.station = null;
+}
+
+function fixText(str) {
+  let x = String(str || '').replace(/\s+/g, ' ').trim();
+  if (/[ÃÄÅ][\x80-\xBF]/.test(x)) { try { x = decodeURIComponent(escape(x)); } catch {} }
+  return x;
+}
+
+async function fetchT(url, ms = 6000) {
+  const ctl = new AbortController();
+  const id = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    return r;
+  } finally { clearTimeout(id); }
+}
+
+function splitSong(str) {
+  const x = fixText(str);
+  const m = x.match(/^(.+?)\s+[-–]\s+(.+)$/);
+  return m ? { artist: m[1], title: m[2] } : { artist: '', title: x };
+}
+
+const NP_STRATEGIES = {
+  // StreamTheWorld / Triton (Joy Türk, Virgin, Süper FM, Metro FM…)
+  async triton(st) {
+    const m = st.url.match(/livestream-redirect\/([A-Z0-9_]+?)(?:AAC|_SC)?(?:\.mp3|\.aac)?(?:[?#]|$)/i)
+      || st.url.match(/streamtheworld\.com(?::\d+)?\/([A-Z0-9_]+?)(?:AAC|_SC)?(?:\.mp3|\.aac)?(?:[?#]|$)/i);
+    if (!m) return null;
+    const r = await fetchT(`https://np.tritondigital.com/public/nowplaying?mountName=${m[1]}&numberToFetch=1&eventType=track`);
+    const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+    const prop = (n) => {
+      const el = [...xml.getElementsByTagName('property')].find((p) => p.getAttribute('name') === n);
+      return el ? fixText(el.textContent) : '';
+    };
+    const title = prop('cue_title');
+    return title ? { artist: prop('track_artist_name'), title } : null;
+  },
+  // Icecast sunucuları
+  async icecast(st) {
+    if (/\.m3u8/i.test(st.url)) return null;
+    const u = new URL(st.url);
+    const r = await fetchT(`${u.origin}/status-json.xsl`);
+    const j = await r.json();
+    let src = j.icestats && j.icestats.source;
+    if (!src) return null;
+    if (!Array.isArray(src)) src = [src];
+    const mine = src.find((x) => x.listenurl && new URL(x.listenurl, u.origin).pathname === u.pathname) || src[0];
+    if (mine.artist && mine.title) return { artist: fixText(mine.artist), title: fixText(mine.title) };
+    return mine.title ? splitSong(mine.title) : null;
+  },
+  // Shoutcast sunucuları
+  async shoutcast(st) {
+    if (/\.m3u8/i.test(st.url)) return null;
+    const u = new URL(st.url);
+    try {
+      const r = await fetchT(`${u.origin}/stats?sid=1&json=1`);
+      const j = await r.json();
+      if (j.songtitle) return splitSong(j.songtitle);
+    } catch {}
+    const r = await fetchT(`${u.origin}/currentsong?sid=1`);
+    const txt = (await r.text()).trim();
+    return txt && !/^</.test(txt) ? splitSong(txt) : null;
+  },
+};
+
+async function npTick() {
+  const st = NP.station;
+  if (!st) return;
+  const names = NP.strategy === undefined ? Object.keys(NP_STRATEGIES) : NP.strategy ? [NP.strategy] : [];
+  if (!names.length) return;
+  // Yolların hepsini aynı anda dene, ilk cevap veren kazanır
+  const found = await Promise.any(names.map(async (name) => {
+    const info = await NP_STRATEGIES[name](st);
+    if (!info) throw new Error('yok');
+    return { name, info };
+  })).catch(() => null);
+  if (st !== NP.station) return;
+  if (found) { NP.strategy = found.name; npShow(st, found.info); return; }
+  if (NP.strategy === undefined && st === NP.station && !NP.text) NP.strategy = null; // bu radyo bilgi vermiyor
+}
+
+function npShow(st, { artist, title }) {
+  artist = fixText(artist);
+  title = fixText(title);
+  if (!title || title.toLocaleLowerCase('tr') === st.title.toLocaleLowerCase('tr')) return;
+  const text = artist ? `${artist} – ${title}` : title;
+  if (text === NP.text) return;
+  NP.text = text;
+  $('np-title').textContent = `♪ ${title}`;
+  $('np-artist').textContent = artist ? `${artist} · ${st.title}` : st.title;
+  document.title = `${text} – ${st.title}`;
+  setSessionMeta(title, artist ? `${artist} · ${st.title}` : st.title, st.artwork);
+}
+
+// HLS yayınlarına gömülü şarkı bilgisi (iPhone Safari bunu okuyabilir)
+if (audio.textTracks && audio.textTracks.addEventListener) {
+  audio.textTracks.addEventListener('addtrack', (e) => {
+    const tr = e.track;
+    if (tr.kind !== 'metadata') return;
+    tr.mode = 'hidden';
+    tr.addEventListener('cuechange', () => {
+      const st = NP.station;
+      if (!st || !tr.activeCues) return;
+      let artist = '', title = '';
+      for (const cue of tr.activeCues) {
+        const v = cue.value || {};
+        const data = typeof v.data === 'string' ? v.data : (v.info || '');
+        if (v.key === 'TIT2') title = data;
+        else if (v.key === 'TPE1') artist = data;
+        else if (!title && /StreamTitle='([^']*)'/.test(data)) title = data.match(/StreamTitle='([^']*)'/)[1];
+        else if (!title && v.key === 'TXXX' && / [-–] /.test(data)) title = data;
+      }
+      if (!title) return;
+      const info = artist ? { artist, title } : splitSong(title);
+      NP.strategy = NP.strategy || null; // gömülü bilgi geliyor, uzaktan sormaya gerek yok
+      npShow(st, info);
+    });
+  });
+}
 
 // ---------- Arama ----------
 let lastResults = [];
