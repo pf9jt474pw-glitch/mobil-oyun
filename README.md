@@ -4,6 +4,7 @@ Telefonda çalışan, uygulama gibi ana ekrana eklenebilen müzik çalar (PWA).
 
 ## Özellikler
 - **Popüler şarkılar:** Açılışta haftanın en çok dinlenenleri, türlere göre (Hip-Hop, Pop, Elektronik…).
+- **Radyo:** 280+ Türk radyosu (Power, Kral, Number 1 Türk Rap, Slow Türk…), türe göre filtre; kilit ekranında çalar.
 - **Şarkı arama:** Şarkı ya da sanatçı adını yaz, sonuçlardan birine dokun, tam şarkı çalar.
 - **Arka planda çalma:** Ekran kilitlense ya da başka uygulamaya geçsen de müzik devam eder.
 - **Kilit ekranı kontrolleri:** Oynat/duraklat, sonraki/önceki ve ileri-geri sarma kilit ekranından yapılır.

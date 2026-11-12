@@ -12,13 +12,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <header class="top">
     <h1>🎵 Müzik</h1>
     <nav class="tabs">
       <button class="tab active" data-tab="search">Ara</button>
+      <button class="tab" data-tab="radio">Radyo</button>
       <button class="tab" data-tab="favs">Favoriler</button>
       <button class="tab" data-tab="local">Kitaplığım</button>
     </nav>
@@ -40,6 +41,15 @@
       </div>
       <p id="status" class="status">Yükleniyor…</p>
       <ul id="results" class="list"></ul>
+    </section>
+
+    <section id="tab-radio" class="panel">
+      <div class="search">
+        <input id="radio-filter" type="search" placeholder="Radyo ara (ör. Kral, Power, Rap)…">
+      </div>
+      <div id="radio-cats" class="chips"></div>
+      <p id="radio-status" class="status">Yükleniyor…</p>
+      <ul id="radios" class="list"></ul>
     </section>
 
     <section id="tab-favs" class="panel">
@@ -70,7 +80,8 @@
       </div>
       <button id="np-fav" class="icon" aria-label="Favori">♡</button>
     </div>
-    <div class="seek">
+    <div id="live" class="live hidden">● CANLI YAYIN</div>
+    <div id="seek-row" class="seek">
       <span id="t-cur">0:00</span>
       <input id="seek" type="range" min="0" max="1000" value="0" step="1">
       <span id="t-dur">0:00</span>
@@ -85,6 +96,6 @@
   </footer>
 
   <audio id="audio" preload="auto" playsinline></audio>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

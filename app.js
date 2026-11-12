@@ -72,7 +72,7 @@ async function searchTracks(q) {
 }
 
 function streamUrl(track) {
-  if (track.source === 'local') return track.url;
+  if (track.source === 'local' || track.source === 'radio') return track.url;
   return `${apiBase}/tracks/${track.id}/stream?app_name=${APP_NAME}`;
 }
 
@@ -97,6 +97,12 @@ function renderList(ul, tracks, { onPlay, showFav = true, onDelete = null, ranke
       ${showFav ? `<button class="icon fav ${isFav(t) ? 'on' : ''}" aria-label="Favori">${isFav(t) ? '♥' : '♡'}</button>` : ''}
       ${onDelete ? `<button class="icon del" aria-label="Sil">🗑</button>` : ''}
     `;
+    const im = li.querySelector('img');
+    if (im) im.addEventListener('error', () => {
+      const ph = document.createElement('div');
+      ph.className = 'ph'; ph.textContent = '🎵';
+      im.replaceWith(ph);
+    }, { once: true });
     li.addEventListener('click', (e) => {
       if (e.target.closest('.fav')) { toggleFav(t); return; }
       if (e.target.closest('.del')) { onDelete(t); return; }
@@ -168,7 +174,9 @@ async function playFrom(list, i) {
 async function startCurrent() {
   const t = state.queue[state.index];
   if (!t) return;
-  if (t.source !== 'local') await getApiBase();
+  if (t.source === 'audius') await getApiBase();
+  if (t.source === 'radio') countRadioClick(t);
+  radioErrors = t.source === 'radio' ? radioErrors : 0;
   audio.src = streamUrl(t);
   updateNowPlaying(t);
   try {
@@ -183,9 +191,13 @@ function updateNowPlaying(t) {
   $('np-title').textContent = t.title;
   $('np-artist').textContent = t.artist;
   const art = $('np-art');
+  art.onerror = () => { art.onerror = null; art.src = 'icons/icon-192.png'; };
   if (t.artwork) { art.src = t.artwork; art.style.visibility = 'visible'; }
   else { art.removeAttribute('src'); art.style.visibility = 'hidden'; }
   document.title = `${t.title} – ${t.artist}`;
+  const live = t.source === 'radio';
+  $('live').classList.toggle('hidden', !live);
+  $('seek-row').classList.toggle('hidden', live);
   markPlaying();
   refreshFavUI();
 
@@ -250,10 +262,21 @@ audio.addEventListener('ended', () => {
   if (state.repeat === 'one') { audio.currentTime = 0; audio.play().catch(() => {}); return; }
   next();
 });
+let radioErrors = 0;
 audio.addEventListener('error', () => {
+  const t = state.queue[state.index];
+  if (t && t.source === 'radio') {
+    // Yayını açılamayan radyoyu atla, ama art arda en fazla 3 kez
+    if (++radioErrors > 3 || state.queue.length < 2) {
+      radioErrors = 0;
+      $('np-artist').textContent = 'Bu radyo şu an açılamıyor, başka birini dene.';
+      return;
+    }
+  }
   // Çalınamayan şarkıyı atla
   if (state.queue.length > 1) setTimeout(next, 800);
 });
+audio.addEventListener('playing', () => { radioErrors = 0; });
 
 let seeking = false;
 audio.addEventListener('timeupdate', () => {
@@ -383,6 +406,116 @@ async function showPopular() {
 }
 
 $('back-popular').addEventListener('click', showPopular);
+
+// ---------- Radyo ----------
+// Türk radyolarının listesi Radio Browser'dan (ücretsiz, açık radyo rehberi) gelir.
+const RADIO_SERVERS = [
+  'https://de1.api.radio-browser.info',
+  'https://de2.api.radio-browser.info',
+  'https://fi1.api.radio-browser.info',
+  'https://all.api.radio-browser.info',
+];
+const RADIO_CATS = [
+  { label: 'Popüler', re: null },
+  { label: 'Rap', re: /\brap\b|hip.?hop|r&b/ },
+  { label: 'Pop', re: /pop|kral|power|fenomen|joy|s[uü]per|metro|virgin|number/ },
+  { label: 'Slow', re: /slow|kalp|aşk|ask|romantik|nostalj/ },
+  { label: 'Arabesk', re: /arabesk|damar|fantezi/ },
+  { label: 'Türkü', re: /t[uü]rk[uü]|halk|folk|baba|turkuvaz|traditional/ },
+  { label: 'Dans', re: /dans|dance|club/ },
+  { label: 'Rock', re: /rock|alternatif|alternative/ },
+];
+let radioServer = null;
+let radioStations = [];
+let radioCat = 0;
+let radioLoaded = false;
+
+async function radioFetch(path) {
+  const list = radioServer ? [radioServer, ...RADIO_SERVERS] : RADIO_SERVERS;
+  for (const base of list) {
+    try {
+      const r = await fetch(base + path);
+      if (r.ok) { radioServer = base; return r; }
+    } catch {}
+  }
+  throw new Error('Radyo listesi alınamadı');
+}
+
+function countRadioClick(t) {
+  // Radyo rehberinin istediği tıklama bildirimi
+  if (t.uuid) radioFetch(`/json/url/${t.uuid}`).catch(() => {});
+}
+
+async function loadRadios() {
+  const status = $('radio-status');
+  status.style.display = 'block';
+  status.textContent = 'Radyolar yükleniyor…';
+  try {
+    const r = await radioFetch('/json/stations/search?countrycode=TR&hidebroken=true&order=clickcount&reverse=true&limit=400');
+    const data = await r.json();
+    const seen = new Set();
+    radioStations = [];
+    for (const st of data) {
+      const url = st.url_resolved || st.url || '';
+      if (!url.startsWith('https://')) continue; // güvenli olmayan yayınlar telefonda çalmaz
+      const name = (st.name || '').trim().replace(/\s+/g, ' ');
+      const key = name.toLocaleLowerCase('tr');
+      if (!name || seen.has(key)) continue;
+      seen.add(key);
+      radioStations.push({
+        id: st.stationuuid,
+        uuid: st.stationuuid,
+        title: name,
+        artist: 'Canlı radyo',
+        duration: 0,
+        artwork: (st.favicon || '').startsWith('https://') ? st.favicon : '',
+        source: 'radio',
+        url,
+        tags: (st.tags || '').toLocaleLowerCase('tr'),
+      });
+    }
+    radioLoaded = true;
+    renderRadios();
+  } catch {
+    status.textContent = 'Radyolar yüklenemedi. İnternetini kontrol edip Radyo sekmesine tekrar dokun.';
+  }
+}
+
+function radioVisible() {
+  const q = $('radio-filter').value.trim().toLocaleLowerCase('tr');
+  const cat = RADIO_CATS[radioCat];
+  return radioStations.filter((st) => {
+    const hay = `${st.title} ${st.tags}`.toLocaleLowerCase('tr');
+    if (cat.re && !cat.re.test(hay)) return false;
+    return !q || hay.includes(q);
+  });
+}
+
+function renderRadioCats() {
+  const box = $('radio-cats');
+  box.innerHTML = '';
+  RADIO_CATS.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = `chip ${i === radioCat ? 'active' : ''}`;
+    b.textContent = c.label;
+    b.addEventListener('click', () => { radioCat = i; renderRadioCats(); renderRadios(); });
+    box.appendChild(b);
+  });
+}
+
+function renderRadios() {
+  const list = radioVisible();
+  const status = $('radio-status');
+  status.style.display = list.length ? 'none' : 'block';
+  if (!list.length) status.textContent = 'Bu aramaya uyan radyo yok.';
+  renderList($('radios'), list, { onPlay: (i) => playFrom([...list], i) });
+}
+
+renderRadioCats();
+$('radio-filter').addEventListener('input', renderRadios);
+document.querySelector('.tab[data-tab="radio"]').addEventListener('click', () => {
+  if (!radioLoaded) loadRadios();
+});
 
 // ---------- Arama ----------
 let lastResults = [];
