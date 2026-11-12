@@ -1,3 +1,5 @@
+> Bu depoda iki uygulama var: **Gök Kaçışı** (oyun, kök klasör) ve **Melodim** (müzik çalar, [`muzik/`](muzik/README.md)).
+
 # Gök Kaçışı 🚀
 
 Parmağını sürükleyerek gemini yönet, meteorlardan kaç, yıldızları topla. Oyun **Android**, **iOS** ve **web (PWA)** olarak çalışır. Yerel uygulamalar [Capacitor](https://capacitorjs.com) ile aynı web kodundan üretilir.

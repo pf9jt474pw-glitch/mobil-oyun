@@ -7,14 +7,26 @@ on:
 
 jobs:
   android:
-    name: Android APK
+    name: Android APK (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gok-kacisi
+            dir: .
+          - name: melodim
+            dir: muzik
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -22,33 +34,41 @@ jobs:
       - run: npm ci
       - run: npx cap sync android
       - name: Debug APK derle
-        working-directory: android
+        working-directory: ${{ matrix.dir }}/android
         run: ./gradlew assembleDebug --no-daemon
+      - name: APK'yı adlandır
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ${{ matrix.name }}.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: gok-kacisi-android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ matrix.name }}-android-apk
+          path: ${{ matrix.dir }}/${{ matrix.name }}.apk
 
   ios:
-    name: iOS (simülatör derlemesi)
+    name: iOS simülatör derlemesi (${{ matrix.name }})
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gok-kacisi
+            dir: .
+          - name: melodim
+            dir: muzik
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
       - run: npm ci
       - run: npx cap sync ios
       - name: Xcode ile derle (imzasız)
-        working-directory: ios/App
+        working-directory: ${{ matrix.dir }}/ios/App
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: .app paketle
-        run: cd ios/App/build/Build/Products/Debug-iphonesimulator && zip -qr ../../../../../../gok-kacisi-ios-simulator.zip App.app
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gok-kacisi-ios-simulator
-          path: gok-kacisi-ios-simulator.zip

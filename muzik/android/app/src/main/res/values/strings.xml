@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Melodim</string>
+    <string name="title_activity_main">Melodim</string>
+    <string name="package_name">com.mobiloyun.melodim</string>
+    <string name="custom_url_scheme">com.mobiloyun.melodim</string>
+</resources>

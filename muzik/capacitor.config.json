@@ -1,0 +1,8 @@
+{
+  "appId": "com.mobiloyun.melodim",
+  "appName": "Melodim",
+  "webDir": "www",
+  "backgroundColor": "#14111f",
+  "android": { "backgroundColor": "#14111f", "allowMixedContent": true },
+  "ios": { "backgroundColor": "#14111f", "contentInset": "never" }
+}

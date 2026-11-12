@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14111f">
+<title>Melodim</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  /* Tek sütun: üstte başlık, ortada liste, altta mini çalar + sekmeler */
+  :root {
+    color-scheme: dark;
+    --bg: #14111f; --surface: #1e1a2e; --surface2: #2a2540; --line: #332d4d;
+    --fg: #f3f0ff; --muted: #a59fc2; --accent: #ff8a5c; --accent-ink: #2a1206; --teal: #7ad7c3; --danger: #ff6b81;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  input { font: inherit; color: var(--fg); }
+  .hidden { display: none !important; }
+
+  header { padding: calc(var(--top) + 14px) max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 26px; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface); }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn.on { background: var(--accent); color: var(--accent-ink); }
+
+  main { flex: 1; overflow-y: auto; padding: 4px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left)); }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; }
+  .search::placeholder { color: var(--muted); }
+  .btn { border-radius: 12px; padding: 10px 14px; font-weight: 700; background: var(--surface2); white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 7px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: 14px; }
+  .chip.on { background: var(--teal); border-color: var(--teal); color: #08241e; }
+
+  .list { display: flex; flex-direction: column; gap: 2px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; }
+  .row:active { background: var(--surface); }
+  .row.playing { background: var(--surface); }
+  .row.playing .t { color: var(--accent); }
+  .art { flex: none; width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; font-weight: 800;
+    font-size: 17px; color: #fff; overflow: hidden; background: var(--surface2); }
+  .art { position: relative; }
+  .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: var(--surface2); }
+  .meta { flex: 1; min-width: 0; text-align: left; }
+  .t { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .dur { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .row-act { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); flex: none; }
+  .row-act svg { width: 18px; height: 18px; }
+  .row-act.fav { color: var(--accent); }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; line-height: 1.6; }
+  .empty b { color: var(--fg); display: block; font-size: 17px; margin-bottom: 6px; }
+  .status { color: var(--muted); font-size: 13px; padding: 6px 2px 10px; }
+
+  /* Mini çalar */
+  #mini { margin: 0 10px 8px; background: var(--surface2); border-radius: 16px; display: flex; align-items: center; gap: 10px;
+    padding: 8px 8px 8px 8px; position: relative; overflow: hidden; }
+  #mini .meta { cursor: pointer; }
+  #miniBar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); width: 0; }
+  .play-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--fg); color: var(--bg); display: grid; place-items: center; flex: none; }
+  .play-btn svg { width: 20px; height: 20px; }
+
+  nav { display: flex; border-top: 1px solid var(--line); padding: 6px max(16px, env(safe-area-inset-right)) calc(var(--bottom) + 6px) max(16px, env(safe-area-inset-left)); background: var(--bg); }
+  nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  nav button svg { width: 22px; height: 22px; }
+  nav button.on { color: var(--accent); }
+
+  /* Tam ekran çalar */
+  #full { position: fixed; inset: 0; background: linear-gradient(180deg, var(--surface2), var(--bg) 70%); display: flex; flex-direction: column;
+    padding: calc(var(--top) + 12px) max(24px, env(safe-area-inset-right)) calc(var(--bottom) + 24px) max(24px, env(safe-area-inset-left));
+    transform: translateY(100%); transition: transform .28s ease; z-index: 20; }
+  #full.open { transform: none; }
+  @media (prefers-reduced-motion: reduce) { #full { transition: none; } }
+  #full .top { display: flex; justify-content: space-between; align-items: center; }
+  #full .cover { flex: 1; display: grid; place-items: center; min-height: 0; padding: 20px 0; }
+  #full .cover .art { width: min(78vw, 340px, 42vh); height: min(78vw, 340px, 42vh); border-radius: 24px; font-size: 72px; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+  #full h2 { margin: 0; font-size: 22px; text-wrap: balance; }
+  #full .sub { color: var(--muted); margin-top: 4px; }
+  .live { display: inline-block; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 1px; padding: 3px 8px; border-radius: 6px; margin-top: 10px; }
+  .seek { margin-top: 18px; }
+  .seek input { width: 100%; accent-color: var(--accent); }
+  .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .controls { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .controls .icon-btn { background: transparent; width: 48px; height: 48px; }
+  .controls .icon-btn svg { width: 24px; height: 24px; }
+  .controls .icon-btn.on { background: transparent; color: var(--accent); }
+  #repeatBtn[data-one="1"]::after { content: '1'; position: absolute; top: 8px; right: 6px; font-size: 10px; font-weight: 800; }
+  .controls .play-btn { width: 70px; height: 70px; background: var(--accent); color: var(--accent-ink); }
+  .controls .play-btn svg { width: 30px; height: 30px; }
+
+  /* Uyku zamanlayıcısı / bildirim */
+  #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: flex-end; z-index: 30; }
+  #sheet .panel { width: 100%; background: var(--surface); border-radius: 20px 20px 0 0; padding: 18px max(16px, env(safe-area-inset-right)) calc(var(--bottom) + 18px) max(16px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 6px; }
+  #sheet .panel h3 { margin: 0 0 6px; }
+  #sheet .panel button { text-align: left; padding: 13px 12px; border-radius: 12px; background: var(--surface2); font-weight: 600; }
+  #toast { position: fixed; left: 50%; bottom: calc(var(--bottom) + 150px); transform: translateX(-50%); background: var(--fg); color: var(--bg);
+    padding: 10px 16px; border-radius: 12px; font-weight: 600; z-index: 40; max-width: calc(100% - 32px); text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Melod<span>im</span></h1>
+  <button class="icon-btn" id="sleepBtn" aria-label="Uyku zamanlayıcısı" title="Uyku zamanlayıcısı">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+
+<main id="main">
+  <section id="libView">
+    <div class="toolbar">
+      <input class="search" id="libSearch" type="search" placeholder="Şarkılarında ara" autocomplete="off">
+      <button class="btn primary" id="addBtn">+ Ekle</button>
+    </div>
+    <div class="toolbar" id="libActions">
+      <button class="btn" id="shuffleAllBtn">Karışık çal</button>
+      <button class="btn" id="playAllBtn">Hepsini çal</button>
+    </div>
+    <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.ogg,.opus,.wav,.flac" multiple hidden>
+    <div class="status" id="libStatus"></div>
+    <div class="list" id="libList"></div>
+  </section>
+
+  <section id="radioView" class="hidden">
+    <div class="toolbar">
+      <input class="search" id="radioSearch" type="search" placeholder="Radyo ara (ör. Kral, Joy, Power)" autocomplete="off">
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="status" id="radioStatus"></div>
+    <div class="list" id="radioList"></div>
+  </section>
+</main>
+
+<div id="mini" class="hidden">
+  <div class="art" id="miniArt"></div>
+  <div class="meta" id="miniMeta"><div class="t" id="miniTitle"></div><div class="s" id="miniSub"></div></div>
+  <button class="play-btn" id="miniPlay" aria-label="Çal / Duraklat"></button>
+  <div id="miniBar"></div>
+</div>
+
+<nav>
+  <button id="tabLib" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    Kitaplığım
+  </button>
+  <button id="tabRadio">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/></svg>
+    Radyo
+  </button>
+</nav>
+
+<div id="full" aria-hidden="true">
+  <div class="top">
+    <button class="icon-btn" id="closeFull" aria-label="Kapat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <span class="s" id="fullSource"></span>
+    <button class="icon-btn" id="sleepBtn2" aria-label="Uyku zamanlayıcısı">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+  <div class="cover"><div class="art" id="fullArt"></div></div>
+  <div>
+    <h2 id="fullTitle"></h2>
+    <div class="sub" id="fullSub"></div>
+    <span class="live hidden" id="liveBadge">CANLI</span>
+  </div>
+  <div class="seek" id="seekWrap">
+    <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Şarkı konumu">
+    <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+  </div>
+  <div class="controls">
+    <button class="icon-btn" id="shuffleBtn" aria-label="Karışık">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+    </button>
+    <button class="icon-btn" id="prevBtn" aria-label="Önceki">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+    </button>
+    <button class="play-btn" id="bigPlay" aria-label="Çal / Duraklat"></button>
+    <button class="icon-btn" id="nextBtn" aria-label="Sonraki">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>
+    </button>
+    <button class="icon-btn" id="repeatBtn" aria-label="Tekrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="sheet" class="hidden">
+  <div class="panel">
+    <h3>Uyku zamanlayıcısı</h3>
+    <div class="s" id="sleepInfo"></div>
+    <button data-min="15">15 dakika sonra durdur</button>
+    <button data-min="30">30 dakika sonra durdur</button>
+    <button data-min="60">1 saat sonra durdur</button>
+    <button data-min="90">1,5 saat sonra durdur</button>
+    <button data-min="0">Kapat</button>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<audio id="audio" preload="auto"></audio>
+<script src="app.js"></script>
+</body>
+</html>
