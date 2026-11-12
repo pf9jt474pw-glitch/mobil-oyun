@@ -554,9 +554,27 @@ $('lib-playall').addEventListener('click', () => {
 loadLibrary();
 renderFavs();
 
-// Uygulama olarak yüklenebilmesi için service worker
+// Uygulama olarak yüklenebilmesi için service worker.
+// Yeni sürüm yayınlanınca sayfayı bir kez kendiliğinden yeniler.
 if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    // Şarkı çalıyorsa kesmemek için yenilemeyi atla
+    if (!audio.paused) return;
+    reloaded = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        reg.update();
+        // Uygulamaya geri dönüldüğünde de yeni sürüm var mı bak
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
   });
 }
