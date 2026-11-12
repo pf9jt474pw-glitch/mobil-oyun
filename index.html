@@ -20,7 +20,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="search">Ara</button>
       <button class="tab" data-tab="favs">Favoriler</button>
-      <button class="tab" data-tab="local">Cihazdan</button>
+      <button class="tab" data-tab="local">Kitaplığım</button>
     </nav>
   </header>
 
@@ -41,10 +41,14 @@
 
     <section id="tab-local" class="panel">
       <label class="file-btn">
-        Telefondan müzik dosyası seç
-        <input id="file-input" type="file" accept="audio/*" multiple hidden>
+        + Şarkı ekle
+        <input id="file-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg" multiple hidden>
       </label>
-      <p class="status">Seçtiğin dosyalar internetsiz de, arka planda da çalar.</p>
+      <p id="lib-info" class="status">Eklediğin şarkılar telefonda saklanır; internetsiz, arka planda ve kilit ekranında çalar.</p>
+      <div id="lib-tools" class="lib-tools hidden">
+        <input id="lib-filter" type="search" placeholder="Kitaplıkta ara…">
+        <button id="lib-playall" type="button">▶ Tümünü çal</button>
+      </div>
       <ul id="local" class="list"></ul>
     </section>
   </main>

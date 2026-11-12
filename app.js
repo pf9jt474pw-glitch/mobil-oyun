@@ -77,7 +77,7 @@ function streamUrl(track) {
 }
 
 // ---------- Liste çizimi ----------
-function renderList(ul, tracks, { onPlay, showFav = true }) {
+function renderList(ul, tracks, { onPlay, showFav = true, onDelete = null }) {
   ul.innerHTML = '';
   tracks.forEach((t, i) => {
     const li = document.createElement('li');
@@ -94,9 +94,11 @@ function renderList(ul, tracks, { onPlay, showFav = true }) {
       </div>
       <span class="dur">${t.duration ? fmt(t.duration) : ''}</span>
       ${showFav ? `<button class="icon fav ${isFav(t) ? 'on' : ''}" aria-label="Favori">${isFav(t) ? '♥' : '♡'}</button>` : ''}
+      ${onDelete ? `<button class="icon del" aria-label="Sil">🗑</button>` : ''}
     `;
     li.addEventListener('click', (e) => {
       if (e.target.closest('.fav')) { toggleFav(t); return; }
+      if (e.target.closest('.del')) { onDelete(t); return; }
       onPlay(i);
     });
     ul.appendChild(li);
@@ -340,26 +342,143 @@ $('search-form').addEventListener('submit', async (e) => {
   }
 });
 
-// Cihazdan dosya seçme
-$('file-input').addEventListener('change', (e) => {
-  const files = [...e.target.files];
-  const added = files.map((f, i) => ({
-    id: `${Date.now()}-${i}`,
-    title: f.name.replace(/\.[^.]+$/, ''),
-    artist: 'Cihazımdan',
-    duration: 0,
-    artwork: '',
-    source: 'local',
-    url: URL.createObjectURL(f),
-  }));
-  state.localTracks.push(...added);
-  renderList($('local'), state.localTracks, {
-    onPlay: (i) => playFrom([...state.localTracks], i),
-    showFav: false,
+// ---------- Kalıcı kitaplık (IndexedDB) ----------
+// Şarkı dosyaları telefonun içinde, bu sitenin deposunda saklanır.
+const DB_NAME = 'muzik-kitaplik';
+const STORE = 'tracks';
+let dbPromise = null;
+
+function openDb() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return dbPromise;
+}
+
+async function dbTx(mode, fn) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, mode);
+    const out = fn(tx.objectStore(STORE));
+    tx.oncomplete = () => resolve(out && 'result' in out ? out.result : undefined);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
+}
+
+const dbAll = () => dbTx('readonly', (st) => st.getAll());
+const dbPut = (rec) => dbTx('readwrite', (st) => st.put(rec));
+const dbDelete = (id) => dbTx('readwrite', (st) => st.delete(id));
+
+// "Sanatçı - Şarkı.mp3" biçimindeki adları ayır
+function parseName(fileName) {
+  const base = fileName.replace(/\.[^.]+$/, '').replace(/_/g, ' ').trim();
+  const m = base.match(/^(.+?)\s+[-–]\s+(.+)$/);
+  return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: 'Kitaplığım', title: base };
+}
+
+function readDuration(blob) {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    const url = URL.createObjectURL(blob);
+    const done = (d) => { URL.revokeObjectURL(url); resolve(isFinite(d) ? d : 0); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => done(a.duration);
+    a.onerror = () => done(0);
+    setTimeout(() => done(0), 4000);
+    a.src = url;
+  });
+}
+
+function recToTrack(rec) {
+  return {
+    id: rec.id, title: rec.title, artist: rec.artist, duration: rec.duration || 0,
+    artwork: '', source: 'local', url: URL.createObjectURL(rec.blob),
+  };
+}
+
+function libVisible() {
+  const q = $('lib-filter').value.trim().toLocaleLowerCase('tr');
+  if (!q) return state.localTracks;
+  return state.localTracks.filter((t) =>
+    `${t.title} ${t.artist}`.toLocaleLowerCase('tr').includes(q));
+}
+
+function renderLibrary() {
+  const n = state.localTracks.length;
+  $('lib-tools').classList.toggle('hidden', n === 0);
+  $('lib-info').textContent = n
+    ? `${n} şarkı · telefonda kayıtlı, internetsiz de çalar.`
+    : 'Kitaplığın boş. "+ Şarkı ekle" ile Dosyalar uygulamasındaki şarkıları seç; bir kez eklemen yeter.';
+  const list = libVisible();
+  renderList($('local'), list, {
+    onPlay: (i) => playFrom([...list], i),
+    showFav: false,
+    onDelete: deleteFromLibrary,
+  });
+}
+
+async function loadLibrary() {
+  try {
+    const recs = await dbAll();
+    recs.sort((a, b) => b.added - a.added);
+    state.localTracks = recs.map(recToTrack);
+  } catch (err) {
+    console.warn('Kitaplık açılamadı', err);
+  }
+  renderLibrary();
+}
+
+async function deleteFromLibrary(t) {
+  if (!confirm(`"${t.title}" kitaplıktan silinsin mi?`)) return;
+  await dbDelete(t.id);
+  state.localTracks = state.localTracks.filter((x) => x.id !== t.id);
+  renderLibrary();
+}
+
+$('file-input').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
   e.target.value = '';
+  if (!files.length) return;
+  // Tarayıcıdan dosyaların silinmemesini iste
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  const info = $('lib-info');
+  let ok = 0;
+  for (const [i, f] of files.entries()) {
+    info.textContent = `Ekleniyor… (${i + 1}/${files.length})`;
+    const { title, artist } = parseName(f.name);
+    const rec = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title, artist,
+      duration: await readDuration(f),
+      blob: f,
+      added: Date.now(),
+    };
+    try {
+      await dbPut(rec);
+      state.localTracks.unshift(recToTrack(rec));
+      ok++;
+    } catch (err) {
+      console.warn('Kaydedilemedi', err);
+      alert(`"${title}" kaydedilemedi. Telefonda yer kalmamış olabilir.`);
+      break;
+    }
+  }
+  renderLibrary();
 });
 
+$('lib-filter').addEventListener('input', renderLibrary);
+$('lib-playall').addEventListener('click', () => {
+  const list = libVisible();
+  if (list.length) playFrom([...list], 0);
+});
+
+loadLibrary();
 renderFavs();
 
 // Uygulama olarak yüklenebilmesi için service worker

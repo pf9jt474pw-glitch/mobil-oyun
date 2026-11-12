@@ -8,7 +8,7 @@ Telefonda çalışan, uygulama gibi ana ekrana eklenebilen müzik çalar (PWA).
 - **Kilit ekranı kontrolleri:** Oynat/duraklat, sonraki/önceki ve ileri-geri sarma kilit ekranından yapılır.
 - **Karıştır ve tekrarla:** Rastgele çalma; listeyi ya da tek şarkıyı tekrar etme.
 - **Favoriler:** ♡ ile beğendiğin şarkılar telefonda saklanır.
-- **Cihazdan çalma:** Telefondaki müzik dosyalarını seçip internetsiz çalabilirsin.
+- **Kalıcı kitaplık:** Telefondaki şarkı dosyalarını bir kez ekle; uygulamayı kapatsan da saklanır, internetsiz çalar. Kitaplıkta arama, tümünü çal ve silme var.
 
 Müzikler [Audius](https://audius.co) açık müzik platformundan, telifli olmayan yasal yollarla gelir
 (ücretsiz, hesap ve API anahtarı gerekmez).
