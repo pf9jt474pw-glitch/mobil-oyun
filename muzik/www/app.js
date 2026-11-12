@@ -59,6 +59,25 @@
   const platform = Cap && Cap.getPlatform ? Cap.getPlatform() : 'web';
   const Plugins = (Cap && Cap.Plugins) || {};
   const NativeMedia = platform === 'android' ? Plugins.MediaService : null;
+  const isIOS = platform === 'ios' || /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Web sürümü https üzerinden açılır; tarayıcı http yayınları engeller
+  const needHttps = !isNative && location.protocol === 'https:';
+  // Bazı büyük yayıncılar (Virgin, Süper FM, Metro FM...) https'i de destekler; adresi yükselt
+  function streamUrl(s) {
+    let url = s.url_resolved || s.url || '';
+    const m = url.match(/^http:\/\/([\w-]+\.live\.streamtheworld\.com)(?::\d+)?\/(.+)$/i);
+    if (m) url = `https://${m[1]}/${m[2]}`;
+    return url;
+  }
+  function playableStation(s) {
+    const url = streamUrl(s);
+    if (!url) return false;
+    if (needHttps && !url.startsWith('https://')) return false;
+    const codec = (s.codec || '').toUpperCase();
+    if (s.hls || /\.m3u8(\?|$)/i.test(url)) return isIOS;           // HLS'i iPhone doğrudan çalar
+    if (isIOS && /OGG|OPUS|FLAC|VORBIS/.test(codec)) return false; // iPhone bu biçimleri çalamaz
+    return true;
+  }
 
   // ---------- Durum ----------
   let tracks = [];            // kitaplık (blob olmadan)
@@ -169,7 +188,7 @@
     clearTimeout(retryT); retries = 0;
     cur = { kind: 'radio', station: st };
     queue = []; qi = -1;
-    audio.src = st.url_resolved || st.url;
+    audio.src = streamUrl(st);
     updateUI(); renderRadio();
     if (autoplay) await doPlay();
     try { fetch(`${radioBase}/json/url/${st.stationuuid}`).catch(() => {}); } catch {}
@@ -186,7 +205,7 @@
   function toggle() {
     if (!cur) { if (tracks.length) playQueue(tracks.map(t => t.id), 0); else switchTab('radio'); return; }
     if (audio.paused) {
-      if (cur.kind === 'radio') { audio.src = cur.station.url_resolved || cur.station.url; } // canlı yayına yeniden bağlan
+      if (cur.kind === 'radio') { audio.src = streamUrl(cur.station); } // canlı yayına yeniden bağlan
       doPlay();
     } else pause();
   }
@@ -232,14 +251,14 @@
   audio.addEventListener('error', () => {
     if (!cur || !audio.getAttribute('src')) return;
     if (cur.kind === 'radio') {
-      if (wantPlaying && ++retries > 5) { wantPlaying = false; retries = 0; toast('Bu yayına şu an bağlanılamıyor. Başka bir istasyon dene.', 4000); updateUI(); return; }
-      if (wantPlaying) { toast('Yayın bağlantısı koptu, yeniden deneniyor…'); retryT = setTimeout(() => { if (wantPlaying && cur && cur.kind === 'radio') { audio.src = cur.station.url_resolved || cur.station.url; audio.play().catch(() => {}); } }, 4000); }
+      if (wantPlaying && ++retries > 5) { wantPlaying = false; retries = 0; toast('Bu radyo şu an yayın yapmıyor ya da telefonunda çalınamıyor. Başka bir istasyon dene.', 4000); updateUI(); return; }
+      if (wantPlaying) { toast('Yayın bağlantısı koptu, yeniden deneniyor…'); retryT = setTimeout(() => { if (wantPlaying && cur && cur.kind === 'radio') { audio.src = streamUrl(cur.station); audio.play().catch(() => {}); } }, 4000); }
     } else { toast('Bu dosya çalınamadı, sonrakine geçiliyor'); setTimeout(next, 800); }
   });
   audio.addEventListener('stalled', () => {
     if (cur && cur.kind === 'radio' && wantPlaying) {
       clearTimeout(retryT);
-      retryT = setTimeout(() => { if (wantPlaying && audio.readyState < 3 && cur && cur.kind === 'radio') { audio.src = cur.station.url_resolved || cur.station.url; audio.play().catch(() => {}); } }, 8000);
+      retryT = setTimeout(() => { if (wantPlaying && audio.readyState < 3 && cur && cur.kind === 'radio') { audio.src = streamUrl(cur.station); audio.play().catch(() => {}); } }, 8000);
     }
   });
   let lastSave = 0;
@@ -414,7 +433,7 @@
   function selectChip(id) {
     activeChip = id;
     document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.chip === id));
-    if (id === 'fav') { radioResults = favStations.slice(); $('radioStatus').textContent = favStations.length ? `${favStations.length} favori istasyon` : ''; renderRadio(); return; }
+    if (id === 'fav') { radioResults = favStations.filter(playableStation); $('radioStatus').textContent = favStations.length ? `${favStations.length} favori istasyon` : ''; renderRadio(); return; }
     searchRadio(CHIPS.find(c => c.id === id).q);
   }
   async function radioFetch(path) {
@@ -432,12 +451,12 @@
   async function searchRadio(q) {
     const my = ++reqId;
     $('radioStatus').textContent = 'Yükleniyor…'; $('radioList').innerHTML = '';
-    const p = new URLSearchParams({ ...q, order: 'clickcount', reverse: 'true', hidebroken: 'true', limit: '80' });
+    const p = new URLSearchParams({ ...q, order: 'clickcount', reverse: 'true', hidebroken: 'true', limit: '250' });
     try {
       const data = await radioFetch('/json/stations/search?' + p);
       if (my !== reqId) return;
       const seen = new Set();
-      radioResults = data.filter(s => s.url_resolved && !s.hls && !seen.has(s.name.trim().toLowerCase()) && seen.add(s.name.trim().toLowerCase()));
+      radioResults = data.filter(s => playableStation(s) && !seen.has(s.name.trim().toLowerCase()) && seen.add(s.name.trim().toLowerCase()));
       $('radioStatus').textContent = radioResults.length ? `${radioResults.length} istasyon` : '';
       renderRadio();
     } catch {
@@ -474,7 +493,7 @@
         <button class="row-act${isFav(s) ? ' fav' : ''}" data-fav="${s.stationuuid}" aria-label="Favori">${ICON_STAR(isFav(s))}</button></div>`;
     }).join('');
   }
-  const pick = s => ({ stationuuid: s.stationuuid, name: s.name, url: s.url, url_resolved: s.url_resolved, favicon: s.favicon, country: s.country, state: s.state, tags: s.tags, bitrate: s.bitrate });
+  const pick = s => ({ stationuuid: s.stationuuid, name: s.name, url: s.url, url_resolved: s.url_resolved, favicon: s.favicon, country: s.country, state: s.state, tags: s.tags, bitrate: s.bitrate, codec: s.codec, hls: s.hls });
   $('radioList').addEventListener('click', e => {
     const p = e.target.closest('[data-st]'), f = e.target.closest('[data-fav]');
     if (p) { const s = radioResults.find(x => x.stationuuid === p.dataset.st); if (s) playStation(pick(s)); }
@@ -520,14 +539,14 @@
     $('plStats').textContent = `${LIST.tracks.length} şarkı · ${have} tanesi kitaplığında`;
     $('plActions').classList.toggle('hidden', !have);
     const rows = plRows();
-    const hint = have ? '' : `<div class="hint"><b>Bu şarkılar Spotify'dan gelmez.</b> Listede yalnızca şarkı adları var. Aynı şarkıların dosyalarını <b>Kitaplığım → + Ekle</b> ile eklediğinde burada otomatik eşleşir ve reklamsız, arka planda çalar. Eksik olanları yeşil düğmeyle Spotify'da açabilirsin.</div>`;
+    const hint = have === LIST.tracks.length ? '' : `<div class="hint"><b>Spotify şarkıların sesini vermiyor, sadece adlarını.</b> Bir şarkının Melodim'de reklamsız ve arka planda çalması için o şarkının dosyası telefonunda (Dosyalar uygulamasında) olmalı. Dosyayı ekleyince buradaki yeşil düğme turuncu <b>Çal</b> düğmesine dönüşür.<div style="margin-top:10px"><button class="btn primary" id="plAdd">+ Şarkı dosyası ekle</button></div></div>`;
     if (!rows.length) { $('plList').innerHTML = hint + '<div class="empty">Bu filtrede şarkı yok.</div>'; return; }
     $('plList').innerHTML = hint + rows.map(({ it, m }) => {
       const a = artHTML(it.artist.split(',')[0]);
       const on = m && cur && cur.kind === 'track' && cur.id === m.id;
       const act = m
         ? `<button class="tag have" data-plplay="${m.id}">Çal</button>`
-        : `<button class="tag sp" data-spid="${esc(it.id)}">Spotify</button>`;
+        : `<button class="tag sp" data-spid="${esc(it.id)}">Spotify'da aç</button>`;
       return `<div class="row${on ? ' playing' : ''}${m ? '' : ' dim'}">
         <div class="art" style="${a.style}">${a.html}</div>
         <div class="meta"><div class="t">${esc(it.title)}</div><div class="s">${esc(it.artist)}</div></div>
@@ -536,6 +555,7 @@
   }
   function plQueue() { return LIST ? LIST.tracks.map(matchTrack).filter(Boolean).map(t => t.id).filter((v, i, a) => a.indexOf(v) === i) : []; }
   $('plList').addEventListener('click', e => {
+    if (e.target.closest('#plAdd')) { $('fileInput').click(); return; }
     const p = e.target.closest('[data-plplay]'), sp = e.target.closest('[data-spid]');
     if (p) { const ids = plQueue(); playQueue(ids, ids.indexOf(p.dataset.plplay)); }
     if (sp && sp.dataset.spid) {

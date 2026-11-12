@@ -1,5 +1,5 @@
 // Uygulama dosyalarını önbelleğe alır: internetsiz açılır, kitaplıktaki şarkılar çalar.
-const CACHE = 'melodim-v1';
+const CACHE = 'melodim-v2';
 const FILES = ['./', './index.html', './app.js', './playlists.js', './manifest.json', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())));
