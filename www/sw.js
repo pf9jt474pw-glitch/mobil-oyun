@@ -1,5 +1,5 @@
-const CACHE = 'gok-kacisi-v1';
-const FILES = ['./', './index.html', './game.js', './manifest.json', './icons/icon.svg'];
+const CACHE = 'gok-kacisi-v2';
+const FILES = ['./', './index.html', './game.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

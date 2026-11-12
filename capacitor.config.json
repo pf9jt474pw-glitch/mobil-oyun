@@ -1,0 +1,8 @@
+{
+  "appId": "com.mobiloyun.gokkacisi",
+  "appName": "Gök Kaçışı",
+  "webDir": "www",
+  "backgroundColor": "#0b1026",
+  "android": { "backgroundColor": "#0b1026" },
+  "ios": { "backgroundColor": "#0b1026", "contentInset": "never" }
+}

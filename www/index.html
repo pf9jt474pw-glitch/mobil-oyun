@@ -10,7 +10,7 @@
 <title>Gök Kaçışı</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   :root { --bg:#0b1026; --fg:#f2f4ff; --accent:#ffd166; --accent2:#06d6a0; --danger:#ef476f; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -69,7 +69,8 @@
 
 <script src="game.js"></script>
 <script>
-  if ('serviceWorker' in navigator) {
+  // Service worker yalnızca web/PWA sürümünde gerekli; yerel uygulamada dosyalar zaten cihazda
+  if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 </script>

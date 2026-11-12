@@ -43,7 +43,20 @@
       o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
     } catch {}
   }
-  const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
+  // ---- Yerel (Capacitor) entegrasyonu: Android/iOS uygulamasında çalışırken ----
+  const Cap = window.Capacitor;
+  const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+  const Plugins = (Cap && Cap.Plugins) || {};
+  const vibrate = ms => {
+    try {
+      if (isNative && Plugins.Haptics) {
+        const total = Array.isArray(ms) ? ms.reduce((a, b) => a + b, 0) : ms;
+        if (total <= 20) Plugins.Haptics.impact({ style: 'LIGHT' });
+        else if (total <= 150) Plugins.Haptics.impact({ style: 'HEAVY' });
+        else Plugins.Haptics.notification({ type: 'ERROR' });
+      } else if (navigator.vibrate) navigator.vibrate(ms);
+    } catch {}
+  };
 
   // ---- Oyun durumu ----
   let state = 'menu'; // menu | play | paused | over
@@ -142,6 +155,18 @@
   ui.soundBtn.onclick = () => { soundOn = !soundOn; store.set('gk_sound', soundOn); ui.soundBtn.textContent = 'Ses: ' + (soundOn ? 'Açık' : 'Kapalı'); };
   ui.soundBtn.textContent = 'Ses: ' + (soundOn ? 'Açık' : 'Kapalı');
   ui.bestMenu.textContent = best;
+  if (isNative) {
+    try { Plugins.StatusBar && Plugins.StatusBar.hide(); } catch {}
+    try {
+      // Android geri tuşu: oyunda duraklat, menüde uygulamadan çık
+      Plugins.App && Plugins.App.addListener('backButton', () => {
+        if (state === 'play') togglePause();
+        else if (state === 'paused' || state === 'over') toMenu();
+        else Plugins.App.exitApp();
+      });
+      Plugins.App && Plugins.App.addListener('pause', () => { if (state === 'play') togglePause(); });
+    } catch {}
+  }
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(); });
 
   // ---- Güncelleme ----
