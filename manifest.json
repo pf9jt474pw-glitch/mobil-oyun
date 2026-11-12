@@ -1,0 +1,15 @@
+{
+  "name": "Gök Kaçışı",
+  "short_name": "Gök Kaçışı",
+  "description": "Meteorlardan kaç, yıldızları topla! Mobil uyumlu arcade oyunu.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0b1026",
+  "theme_color": "#0b1026",
+  "lang": "tr",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
