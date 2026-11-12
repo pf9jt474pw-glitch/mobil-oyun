@@ -13,8 +13,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: gok-kacisi
-            dir: .
           - name: melodim
             dir: muzik
     defaults:
@@ -50,8 +48,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: gok-kacisi
-            dir: .
           - name: melodim
             dir: muzik
     defaults:
