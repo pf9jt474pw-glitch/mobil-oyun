@@ -101,3 +101,16 @@ main { padding: 8px 16px; }
   background: var(--card2); color: var(--text); font-size: 15px; white-space: nowrap;
 }
 .del { font-size: 18px; color: var(--muted); }
+
+.sec-title { font-size: 19px; margin: 14px 0 8px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0; padding: 8px 14px; border: 0; border-radius: 18px;
+  background: var(--card); color: var(--muted); font-size: 14px;
+}
+.chip.active { background: var(--text); color: #000; font-weight: 600; }
+.hidden { display: none !important; }
+.results-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; color: var(--muted); font-size: 14px; }
+.results-head button { background: var(--card); color: var(--text); border: 0; border-radius: 14px; padding: 6px 12px; font-size: 14px; }
+.rank { width: 22px; text-align: center; color: var(--muted); font-size: 14px; flex-shrink: 0; }

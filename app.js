@@ -77,7 +77,7 @@ function streamUrl(track) {
 }
 
 // ---------- Liste çizimi ----------
-function renderList(ul, tracks, { onPlay, showFav = true, onDelete = null }) {
+function renderList(ul, tracks, { onPlay, showFav = true, onDelete = null, ranked = false }) {
   ul.innerHTML = '';
   tracks.forEach((t, i) => {
     const li = document.createElement('li');
@@ -87,6 +87,7 @@ function renderList(ul, tracks, { onPlay, showFav = true, onDelete = null }) {
       ? `<img src="${esc(t.artwork)}" alt="" loading="lazy">`
       : `<div class="ph">🎵</div>`;
     li.innerHTML = `
+      ${ranked ? `<span class="rank">${i + 1}</span>` : ''}
       ${img}
       <div class="meta">
         <div class="title">${esc(t.title)}</div>
@@ -320,13 +321,80 @@ document.querySelectorAll('.tab').forEach((btn) => {
   });
 });
 
-// Arama
+// ---------- Popüler şarkılar ----------
+const GENRES = [
+  { label: 'Tümü', value: '' },
+  { label: 'Hip-Hop / Rap', value: 'Hip-Hop/Rap' },
+  { label: 'Pop', value: 'Pop' },
+  { label: 'Elektronik', value: 'Electronic' },
+  { label: 'R&B', value: 'R&B/Soul' },
+  { label: 'Lo-Fi', value: 'Lo-Fi' },
+  { label: 'Rock', value: 'Rock' },
+  { label: 'Alternatif', value: 'Alternative' },
+  { label: 'Dans', value: 'Dance' },
+];
+let currentGenre = '';
+let popularTracks = [];
+let popularReq = 0;
+
+async function fetchTrending(genre) {
+  const base = await getApiBase();
+  const g = genre ? `&genre=${encodeURIComponent(genre)}` : '';
+  const r = await fetch(`${base}/tracks/trending?time=week&limit=50${g}&app_name=${APP_NAME}`);
+  if (!r.ok) throw new Error('Popüler liste alınamadı');
+  const j = await r.json();
+  return (j.data || []).filter((t) => t.is_streamable !== false).map(toTrack);
+}
+
+function renderGenres() {
+  const box = $('genres');
+  box.innerHTML = '';
+  GENRES.forEach((g) => {
+    const b = document.createElement('button');
+    b.className = `chip ${g.value === currentGenre ? 'active' : ''}`;
+    b.textContent = g.label;
+    b.addEventListener('click', () => { currentGenre = g.value; showPopular(); });
+    box.appendChild(b);
+  });
+}
+
+async function showPopular() {
+  const req = ++popularReq;
+  renderGenres();
+  $('popular').classList.remove('hidden');
+  $('results-head').classList.add('hidden');
+  $('search-input').value = '';
+  const status = $('status');
+  status.style.display = 'block';
+  status.textContent = 'Popüler şarkılar yükleniyor…';
+  $('results').innerHTML = '';
+  try {
+    const list = await fetchTrending(currentGenre);
+    if (req !== popularReq) return;
+    popularTracks = list;
+    if (!list.length) { status.textContent = 'Bu türde şu an şarkı yok.'; return; }
+    status.style.display = 'none';
+    renderList($('results'), list, { onPlay: (i) => playFrom([...popularTracks], i), ranked: true });
+  } catch {
+    if (req !== popularReq) return;
+    apiBase = null;
+    status.textContent = 'Bağlantı hatası. İnternetini kontrol edip tekrar dene.';
+  }
+}
+
+$('back-popular').addEventListener('click', showPopular);
+
+// ---------- Arama ----------
 let lastResults = [];
 $('search-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = $('search-input').value.trim();
-  if (!q) return;
+  if (!q) { showPopular(); return; }
+  popularReq++; // bekleyen popüler isteğini geçersiz kıl
   $('search-input').blur();
+  $('popular').classList.add('hidden');
+  $('results-head').classList.remove('hidden');
+  $('results-title').textContent = `"${q}" için sonuçlar`;
   const status = $('status');
   status.style.display = 'block';
   status.textContent = 'Aranıyor…';
@@ -341,6 +409,11 @@ $('search-form').addEventListener('submit', async (e) => {
     status.textContent = 'Bağlantı hatası. İnternetini kontrol edip tekrar dene.';
   }
 });
+$('search-input').addEventListener('search', () => {
+  if (!$('search-input').value.trim()) showPopular();
+});
+
+showPopular();
 
 // ---------- Kalıcı kitaplık (IndexedDB) ----------
 // Şarkı dosyaları telefonun içinde, bu sitenin deposunda saklanır.

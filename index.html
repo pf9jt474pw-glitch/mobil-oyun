@@ -30,7 +30,15 @@
         <input id="search-input" type="search" placeholder="Şarkı veya sanatçı adı yaz…" enterkeyhint="search">
         <button type="submit" aria-label="Ara">Ara</button>
       </form>
-      <p id="status" class="status">Bir şarkı adı yazıp ara.</p>
+      <div id="popular">
+        <h2 class="sec-title">🔥 Popüler şarkılar</h2>
+        <div id="genres" class="chips"></div>
+      </div>
+      <div id="results-head" class="results-head hidden">
+        <span id="results-title"></span>
+        <button id="back-popular" type="button">← Popüler</button>
+      </div>
+      <p id="status" class="status">Yükleniyor…</p>
       <ul id="results" class="list"></ul>
     </section>
 

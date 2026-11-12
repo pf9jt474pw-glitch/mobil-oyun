@@ -3,6 +3,7 @@
 Telefonda çalışan, uygulama gibi ana ekrana eklenebilen müzik çalar (PWA).
 
 ## Özellikler
+- **Popüler şarkılar:** Açılışta haftanın en çok dinlenenleri, türlere göre (Hip-Hop, Pop, Elektronik…).
 - **Şarkı arama:** Şarkı ya da sanatçı adını yaz, sonuçlardan birine dokun, tam şarkı çalar.
 - **Arka planda çalma:** Ekran kilitlense ya da başka uygulamaya geçsen de müzik devam eder.
 - **Kilit ekranı kontrolleri:** Oynat/duraklat, sonraki/önceki ve ileri-geri sarma kilit ekranından yapılır.
