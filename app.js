@@ -577,6 +577,28 @@ const NP_STRATEGIES = {
     const title = prop('cue_title');
     return title ? { artist: prop('track_artist_name'), title } : null;
   },
+  // Centova Cast yayın panelleri (Hey Radyo ve birçok yerel radyo)
+  async centova(st) {
+    const m = st.url.match(/\/proxy\/([^/?#]+)/);
+    if (!m) return null;
+    const u = new URL(st.url);
+    const user = m[1];
+    const urls = [
+      `${u.origin}/rpc/${user}/streaminfo.get`,
+      `https://${u.hostname}:2199/rpc/${user}/streaminfo.get`,
+      `${u.origin}/external/rpc.php?m=streaminfo.get&username=${user}&charset=&mountpoint=&rid=${user}`,
+      `https://${u.hostname}:2199/external/rpc.php?m=streaminfo.get&username=${user}&charset=&mountpoint=&rid=${user}`,
+    ];
+    const res = await Promise.any(urls.map(async (url) => {
+      const j = await (await fetchT(url)).json();
+      const d = j && j.data && j.data[0];
+      if (!d) throw new Error('yok');
+      if (d.track && d.track.title) return { artist: d.track.artist || '', title: d.track.title };
+      if (d.song) return splitSong(d.song);
+      throw new Error('yok');
+    })).catch(() => null);
+    return res;
+  },
   // Icecast sunucuları
   async icecast(st) {
     if (/\.m3u8/i.test(st.url)) return null;
